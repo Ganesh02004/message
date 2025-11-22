@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+    body {
+        margin: 0;
+        font-family: "Inter", system-ui, Arial;
+        background: #eef2f7;
+        display: flex;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 1000px;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+        overflow: hidden;
+        min-height: 600px;
+    }
+
+    .sidebar {
+        background: #f8fafc;
+        border-right: 1px solid #e5e7eb;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar h2 {
+        margin: 0 0 20px;
+        font-size: 20px;
+    }
+
+    input, button {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        width: 100%;
+        font-size: 14px;
+    }
+
+    button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+
+    .room-list div {
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: #e2e8f0;
+        cursor: pointer;
+    }
+    .room-list div:hover { background: #cbd5e1; }
+
+    .chat-area {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .chat-header {
+        padding: 15px;
+        background: #1e293b;
+        color: white;
+        font-size: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #onlineUsers {
+        font-size: 12px;
+        color: #e2e8f0;
+    }
+
+    .messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        background: #f1f5f9;
+    }
+
+    .msg {
+        background: white;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        max-width: 70%;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+    }
+
+    .own {
+        background: #d1fae5;
+        margin-left: auto;
+    }
+
+    .footer {
+        padding: 15px;
+        background: #e2e8f0;
+        display: flex;
+        gap: 10px;
+    }
+
+    .footer input {
+        flex: 1;
+    }
+</style>
+
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>ESP32 Chat</h2>
+
+        <input id="username" placeholder="Your Name">
+        <input id="roomName" placeholder="Room Name (optional)">
+        <button onclick="joinRoom()">Join Room</button>
+
+        <h3 style="margin-top: 20px;">Available Rooms</h3>
+        <div class="room-list" id="roomList">
+            <div onclick="quickJoin('General')">General</div>
+        </div>
+
+        <div style="margin-top:auto;">
+            <small>ESP32: <span id="espIP">Not Set</span></small>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area">
+        <div class="chat-header">
+            <span id="roomTitle">Not Connected</span>
+            <span id="onlineUsers"></span>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="footer">
+            <input id="messageBox" placeholder="Type message..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    /* -------------------------
+       CONFIG (SET YOUR ESP IP)
+       ------------------------- */
+    const ESP_IP = "192.168.0.114";
+    document.getElementById("espIP").innerText = ESP_IP;
+
+    const WS_URL = `ws://${ESP_IP}:8765`;
+
+    let ws = null;
+    let myName = "";
+    let currentRoom = "";
+
+    /* -------------------------
+       ROOM JOIN LOGIC
+       ------------------------- */
+    function quickJoin(name) {
+        document.getElementById('roomName').value = name;
+        joinRoom();
+    }
+
+    function joinRoom() {
+        myName = document.getElementById("username").value.trim();
+        currentRoom = document.getElementById("roomName").value.trim() || "General";
+
+        if (!myName) {
+            alert("Enter your name");
+            return;
+        }
+
+        connectWebSocket();
+    }
+
+    /* -------------------------
+       WEBSOCKET CONNECT
+       ------------------------- */
+    function connectWebSocket() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            console.log("Connected");
+            document.getElementById("roomTitle").innerText = "Room: " + currentRoom;
+
+            ws.send(JSON.stringify({
+                type: "join",
+                username: myName,
+                room: currentRoom
+            }));
+        };
+
+        ws.onerror = (e) => console.error("WebSocket Error:", e);
+
+        ws.onclose = () => {
+            console.log("Disconnected");
+            document.getElementById("onlineUsers").innerText = "Disconnected";
+        };
+
+        ws.onmessage = (msg) => {
+            let data = JSON.parse(msg.data);
+            console.log(data);
+
+            if (data.type === "message_history") {
+                document.getElementById("messages").innerHTML = "";
+                data.messages.forEach(addMessageFromHistory);
+            }
+
+            if (data.type === "new_message") {
+                addMessage(data, data.username === myName);
+            }
+
+            if (data.type === "user_list") {
+                document.getElementById("onlineUsers").innerText =
+                    "Online: " + data.users.join(", ");
+            }
+
+            if (data.type === "user_joined") {
+                systemMessage(`${data.username} joined`);
+            }
+
+            if (data.type === "user_left") {
+                systemMessage(`${data.username} left`);
+            }
+        };
+    }
+
+    /* -------------------------
+       MESSAGE HANDLING
+       ------------------------- */
+    function addMessageFromHistory(m) {
+        addMessage(m, m.username === myName);
+    }
+
+    function addMessage(m, own = false) {
+        let msgBox = document.createElement("div");
+        msgBox.className = "msg" + (own ? " own" : "");
+
+        msgBox.innerHTML = `<b>${m.username}</b><br>${m.message}`;
+        document.getElementById("messages").appendChild(msgBox);
+
+        // autoscroll
+        const chat = document.getElementById("messages");
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function systemMessage(text) {
+        let msgBox = document.createElement("div");
+        msgBox.className = "msg";
+        msgBox.style.background = "#fde68a";
+        msgBox.innerHTML = `<i>${text}</i>`;
+        document.getElementById("messages").appendChild(msgBox);
+
+        const chat = document.getElementById("messages");
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    /* -------------------------
+       SEND MESSAGE
+       ------------------------- */
+    function sendMessage() {
+        if (!ws || ws.readyState !== 1) return;
+
+        const msg = document.getElementById("messageBox").value.trim();
+        if (!msg) return;
+
+        ws.send(JSON.stringify({
+            type: "send",
+            message: msg
+        }));
+
+        document.getElementById("messageBox").value = "";
+    }
+
+</script>
+
+</body>
+</html>
