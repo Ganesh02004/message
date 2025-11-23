@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Hub Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 1200px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 5px;
+        }
+
+        #connection-status {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .screen {
+            width: 100%;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            color: #e74c3c;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .success {
+            color: #27ae60;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .room-list {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px 0;
+        }
+
+        .room-item {
+            padding: 15px;
+            background: #f8f9fa;
+            margin: 10px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 4px solid #667eea;
+        }
+
+        .room-item:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .create-room-section {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .chat-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-right: 1px solid #ddd;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 12px 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message .username {
+            font-weight: bold;
+            color: #667eea;
+            margin-right: 8px;
+        }
+
+        .message .timestamp {
+            font-size: 11px;
+            color: #999;
+            margin-left: 8px;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .message-input-area {
+            display: flex;
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #ddd;
+            gap: 10px;
+        }
+
+        .message-input-area input {
+            flex: 1;
+            margin: 0;
+        }
+
+        .online-users h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .user-item {
+            padding: 10px;
+            background: white;
+            margin: 8px 0;
+            border-radius: 6px;
+            border-left: 3px solid #27ae60;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online { background: #27ae60; }
+        .status-offline { background: #e74c3c; }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 200px;
+            }
+            
+            .container {
+                height: 100vh;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 ESP32 Hub Chat</h1>
+            <div id="connection-status">
+                <span class="status-indicator status-offline"></span>
+                <span id="status-text">Not connected</span>
+            </div>
+            <div id="room-info"></div>
+        </div>
+
+        <div class="main-content">
+            <!-- Server Setup Screen -->
+            <div id="setup-screen" class="screen">
+                <h2>Connect to ESP32 Server</h2>
+                <input type="text" id="server-ip" placeholder="Enter ESP32 IP (e.g., 192.168.1.100)" value="192.168.1.100">
+                <div class="error" id="setup-error"></div>
+                <button onclick="connectToServer()">Connect</button>
+            </div>
+
+            <!-- Login Screen -->
+            <div id="login-screen" class="screen hidden">
+                <h2>Welcome!</h2>
+                <input type="text" id="username-input" placeholder="Enter your name" maxlength="20">
+                <div class="error" id="login-error"></div>
+                <button onclick="proceedToRooms()">Continue</button>
+            </div>
+
+            <!-- Room Selection -->
+            <div id="room-selection" class="screen hidden">
+                <h2>Select or Create a Room</h2>
+                
+                <div class="room-list" id="room-list"></div>
+
+                <div class="create-room-section">
+                    <h3>Create New Room</h3>
+                    <input type="text" id="new-room-name" placeholder="Room name" maxlength="30">
+                    <input type="password" id="new-room-key" placeholder="Room key (optional)" maxlength="20">
+                    <div class="error" id="create-error"></div>
+                    <div class="success" id="create-success"></div>
+                    <button onclick="createRoom()">Create Room</button>
+                </div>
+
+                <button onclick="logout()">Back</button>
+            </div>
+
+            <!-- Chat Room -->
+            <div id="chat-room" class="main-content hidden">
+                <div class="chat-container">
+                    <div class="sidebar">
+                        <h3>Online Users (<span id="user-count">0</span>)</h3>
+                        <div class="online-users" id="online-users"></div>
+                        <button onclick="leaveRoom()" style="width: 100%; margin-top: 20px;">Leave Room</button>
+                    </div>
+
+                    <div class="chat-area">
+                        <div class="messages" id="messages"></div>
+                        <div class="message-input-area">
+                            <input type="text" id="message-input" placeholder="Type your message..." maxlength="500">
+                            <button onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ESP32_IP = '';
+        let API_BASE = '';
+        let currentUser = '';
+        let currentRoom = '';
+        let connId = '';
+        let lastMsgId = 0;
+        let pollInterval = null;
+        let isConnected = false;
+
+        function updateStatus(online, text) {
+            isConnected = online;
+            const indicator = document.querySelector('.status-indicator');
+            const statusText = document.getElementById('status-text');
+            
+            indicator.className = 'status-indicator ' + (online ? 'status-online' : 'status-offline');
+            statusText.textContent = text || (online ? 'Connected' : 'Disconnected');
+        }
+
+        async function connectToServer() {
+            const ip = document.getElementById('server-ip').value.trim();
+            
+            if (!ip) {
+                document.getElementById('setup-error').textContent = 'Please enter ESP32 IP address';
+                return;
+            }
+
+            ESP32_IP = ip;
+            API_BASE = `http://${ip}`;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatus(true, `Connected to ${ip}`);
+                    
+                    // Register connection
+                    const regResponse = await fetch(`${API_BASE}/api/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    const regData = await regResponse.json();
+                    connId = regData.conn_id;
+                    
+                    showScreen('login-screen');
+                    document.getElementById('setup-error').textContent = '';
+                } else {
+                    throw new Error('Server not responding');
+                }
+            } catch (error) {
+                updateStatus(false);
+                document.getElementById('setup-error').textContent = 
+                    `Cannot connect to ${ip}. Make sure ESP32 is running and IP is correct.`;
+            }
+        }
+
+        function showScreen(screenId) {
+            const screens = ['setup-screen', 'login-screen', 'room-selection', 'chat-room'];
+            screens.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function proceedToRooms() {
+            const username = document.getElementById('username-input').value.trim();
+            if (!username) {
+                document.getElementById('login-error').textContent = 'Please enter a name';
+                return;
+            }
+            currentUser = username;
+            showScreen('room-selection');
+            loadRooms();
+        }
+
+        function logout() {
+            currentUser = '';
+            document.getElementById('username-input').value = '';
+            showScreen('login-screen');
+        }
+
+        async function loadRooms() {
+            try {
+                const response = await fetch(`${API_BASE}/api/rooms`);
+                const data = await response.json();
+                const roomList = document.getElementById('room-list');
+                roomList.innerHTML = '<h3>Available Rooms</h3>';
+                
+                if (data.rooms.length === 0) {
+                    roomList.innerHTML += '<p style="text-align:center; color:#999;">No rooms available. Create one!</p>';
+                } else {
+                    data.rooms.forEach(room => {
+                        const div = document.createElement('div');
+                        div.className = 'room-item';
+                        div.innerHTML = `<strong>${room.name}</strong><br><small>${room.user_count} user(s) online</small>`;
+                        div.onclick = () => joinRoomPrompt(room.name);
+                        roomList.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading rooms:', error);
+                updateStatus(false);
+            }
+        }
+
+        function joinRoomPrompt(roomName) {
+            const key = prompt(`Enter key for room "${roomName}" (leave empty if no key):`);
+            if (key !== null) {
+                joinRoom(roomName, key);
+            }
+        }
+
+        async function joinRoom(roomName, key) {
+            try {
+                const response = await fetch(`${API_BASE}/api/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentUser,
+                        room: roomName,
+                        key: key,
+                        conn_id: connId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentRoom = roomName;
+                    lastMsgId = 0;
+                    document.getElementById('room-info').textContent = `Room: ${currentRoom}`;
+                    document.getElementById('messages').innerHTML = '';
+                    
+                    // Load initial messages
+                    data.messages.forEach(msg => addMessage(msg, false));
+                    lastMsgId = data.messages.length;
+                    
+                    // Update user list
+                    updateUserList(data.users);
+                    
+                    showScreen('chat-room');
+                    
+                    // Start polling
+                    startPolling();
+                } else {
+                    alert(data.error || 'Failed to join room');
+                }
+            } catch (error) {
+                console.error('Error joining room:', error);
+                alert('Failed to join room. Check connection.');
+            }
+        }
+
+        async function createRoom() {
+            const roomName = document.getElementById('new-room-name').value.trim();
+            const roomKey = document.getElementById('new-room-key').value;
+
+            if (!roomName) {
+                document.getElementById('create-error').textContent = 'Please enter a room name';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/rooms/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        room_name: roomName, 
+                        room_key: roomKey 
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('new-room-name').value = '';
+                    document.getElementById('new-room-key').value = '';
+                    document.getElementById('create-error').textContent = '';
+                    document.getElementById('create-success').textContent = 'Room created! Refreshing...';
+                    
+                    setTimeout(() => {
+                        document.getElementById('create-success').textContent = '';
+                        loadRooms();
+                    }, 1500);
+                } else {
+                    document.getElementById('create-error').textContent = data.error;
+                }
+            } catch (error) {
+                document.getElementById('create-error').textContent = 'Error creating room';
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        conn_id: connId,
+                        message: message
+                    })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                    // Message will appear via polling
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/api/updates`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conn_id: connId,
+                            last_msg_id: lastMsgId
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.messages && data.messages.length > 0) {
+                        data.messages.forEach(msg => addMessage(msg));
+                        lastMsgId = data.msg_count || lastMsgId + data.messages.length;
+                    }
+                    
+                    if (data.users) {
+                        updateUserList(data.users);
+                    }
+                    
+                    updateStatus(true);
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    updateStatus(false);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        async function leaveRoom() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+
+            try {
+                await fetch(`${API_BASE}/api/leave`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conn_id: connId })
+                });
+            } catch (error) {
+                console.error('Error leaving room:', error);
+            }
+
+            currentRoom = '';
+            lastMsgId = 0;
+            document.getElementById('room-info').textContent = '';
+            showScreen('room-selection');
+            loadRooms();
+        }
+
+        function addMessage(data, scroll = true) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            
+            const date = new Date(data.timestamp * 1000);
+            const time = date.toLocaleTimeString();
+            
+            messageDiv.innerHTML = `
+                <span class="username">${escapeHtml(data.username)}:</span>
+                ${escapeHtml(data.message)}
+                <span class="timestamp">${time}</span>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            
+            if (scroll) {
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+
+        function updateUserList(users) {
+            const userList = document.getElementById('online-users');
+            const userCount = document.getElementById('user-count');
+            
+            userList.innerHTML = '';
+            userCount.textContent = users.length;
+            
+            users.forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'user-item';
+                div.textContent = user;
+                userList.appendChild(div);
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Enter key handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('server-ip').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') connectToServer();
+            });
+
+            document.getElementById('username-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') proceedToRooms();
+            });
+
+            document.getElementById('message-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (pollInterval) clearInterval(pollInterval);
+            if (connId && currentRoom) {
+                navigator.sendBeacon(`${API_BASE}/api/leave`, JSON.stringify({ conn_id: connId }));
+            }
+        });
+    </script>
+</body>
+</html>
